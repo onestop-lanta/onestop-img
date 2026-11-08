@@ -1,0 +1,50 @@
+<!--
+  EmailJS template for One Stop Travel & Tour — booking confirmation to the customer.
+  In EmailJS → Email Templates → Create:
+    Subject:   Your booking {{order_id}} — One Stop Travel & Tour
+    To Email:  {{to_email}}
+    From Name: One Stop Travel & Tour
+    Reply To:  fjordoflanta@gmail.com
+    Bcc:       fjordoflanta@gmail.com      (you get a copy of every order)
+  Content → switch to "Code" (HTML) mode and paste everything below this comment.
+-->
+<div style="background:#F3EEE5;padding:28px 12px;font-family:Arial,Helvetica,sans-serif;color:#1E1A16">
+  <table width="100%" cellpadding="0" cellspacing="0" style="max-width:600px;margin:0 auto;background:#FBF8F3;border:1px solid #E2D8C7">
+    <tr><td style="padding:26px 30px 10px">
+      <div style="font-family:Georgia,serif;font-size:24px">One Stop Travel &amp; Tour</div>
+      <div style="font-size:11px;letter-spacing:3px;color:#9A7748;text-transform:uppercase;margin-top:6px">Koh Lanta · Booking request {{order_id}}</div>
+    </td></tr>
+    <tr><td style="padding:10px 30px 4px">
+      <h1 style="font-family:Georgia,serif;font-weight:normal;font-size:30px;margin:10px 0 12px">Thank you, {{first_name}}!</h1>
+      <p style="font-size:15px;line-height:1.6;color:#4A433B;margin:0">We have received your booking request. After checking availability, our team will contact you shortly via WhatsApp or phone to confirm your booking and pick-up time.</p>
+    </td></tr>
+    <tr><td style="padding:18px 30px 6px">
+      <div style="font-size:11px;letter-spacing:3px;color:#9A7748;text-transform:uppercase;margin-bottom:4px">Your booking</div>
+      {{{order_html}}}
+      <table width="100%" cellpadding="0" cellspacing="0"><tr>
+        <td style="padding:14px 0;font-family:Georgia,serif;font-size:20px">Total</td>
+        <td style="padding:14px 0;font-family:Georgia,serif;font-size:22px;text-align:right">{{order_total}}</td>
+      </tr></table>
+      {{{fees_html}}}
+      <p style="font-size:13px;color:#6F665B;margin:12px 0 0">Payment in cash — to our representative when we deliver your vouchers to your hotel or villa, or at our tour desk.<br>Staying at: {{customer_stay}}</p>
+    </td></tr>
+    <tr><td style="padding:22px 30px 6px">
+      <div style="font-size:11px;letter-spacing:3px;color:#9A7748;text-transform:uppercase;margin-bottom:10px">How to get your tour voucher</div>
+      <table width="100%" cellpadding="0" cellspacing="0"><tr>
+        <td style="vertical-align:top;padding:14px;border:1px solid #E2D8C7;background:#fff;width:50%">
+          <div style="font-family:Georgia,serif;font-size:18px;margin-bottom:6px">Delivered to your hotel</div>
+          <div style="font-size:13px;line-height:1.55;color:#6F665B">We can bring your vouchers to your hotel or villa. Just reply on WhatsApp with a convenient time.</div>
+        </td>
+        <td style="width:10px"></td>
+        <td style="vertical-align:top;padding:14px;border:1px solid #E2D8C7;background:#fff;width:50%">
+          <div style="font-family:Georgia,serif;font-size:18px;margin-bottom:6px">Or visit our tour desk</div>
+          <div style="font-size:13px;line-height:1.55;color:#6F665B">Show this e-mail or your booking number <b>{{order_id}}</b> at our shop. We will send you the location and payment details when we confirm your booking.</div>
+        </td>
+      </tr></table>
+    </td></tr>
+    <tr><td style="padding:24px 30px 28px">
+      <a href="{{shop_whatsapp_link}}" style="display:inline-block;padding:13px 22px;background:#B8925A;color:#fff;text-decoration:none;font-size:12px;letter-spacing:2px;text-transform:uppercase">Questions? WhatsApp us</a>
+      <p style="font-size:12px;color:#9C9284;margin:18px 0 0;line-height:1.6">One Stop Travel &amp; Tour · {{shop_address}}<br>WhatsApp {{shop_whatsapp}} · {{shop_email}}</p>
+    </td></tr>
+  </table>
+</div>
