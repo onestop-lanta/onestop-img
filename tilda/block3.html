@@ -1,0 +1,492 @@
+<script>
+(function(){
+"use strict";
+const CFG = window.SITE_CONFIG, CUR = CFG.currency;
+const $ = (s,el=document)=>el.querySelector(s), $$=(s,el=document)=>[...el.querySelectorAll(s)];
+const esc = s => String(s??"").replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
+const fmt = n => CUR + Math.round(n).toLocaleString("en-US");
+const store = {
+  get(k,d){ try{ const v=localStorage.getItem(k); return v?JSON.parse(v):d; }catch(e){ return d; } },
+  set(k,v){ try{ localStorage.setItem(k,JSON.stringify(v)); return true; }catch(e){ return false; } }
+};
+const clone = o => JSON.parse(JSON.stringify(o));
+const imgSrc = n => !n ? "" : (n.startsWith("data:")||n.includes("/")) ? n : "https://cdn.jsdelivr.net/gh/onestop-lanta/onestop-img@58c5d03/img/os-"+n.replace(/\//g,"-")+".jpg";
+const today = () => new Date().toISOString().slice(0,10);
+
+/* ---------- catalog (defaults + admin overrides) ---------- */
+let CAT = store.get("lt_catalog", null);
+if(!CAT || CAT.v!==2) CAT = {v:2, tours:clone(TOURS_DEFAULT), bikes:clone(BIKES_DEFAULT), cars:clone(CARS_DEFAULT)};
+const saveCat = () => store.set("lt_catalog", CAT);
+const tourById = id => CAT.tours.find(t=>t.id===id);
+const vehById = (kind,id) => (kind==="bike"?CAT.bikes:CAT.cars).find(v=>v.id===id);
+
+/* ---------- cart ---------- */
+let cart = store.get("lt_cart", []);
+const saveCart = () => { store.set("lt_cart", cart); $("#cartN").textContent = cart.length; };
+const selsOf = t => t.selects || (t.sessions?[{l:"Session",o:t.sessions}]:[]);
+function tourCalc(t,qty,people){
+  let tot=0, ppl=0, extra=0;
+  t.options.forEach(o=>{ const q=+(qty[o.k]||0); tot+=q*o.p; ppl+=q*(o.k==="pair"?2:1); });
+  if(t.charter){ ppl=people||1; if(t.extra){ extra=Math.max(0,ppl-t.extra.over); tot+=extra*t.extra.price; } }
+  return {tot,ppl,extra};
+}
+const money = (t,n) => t.onRequest ? "On request" : fmt(n);
+function lineInfo(it){
+  if(it.kind==="tour"){
+    const t=tourById(it.id); if(!t) return null;
+    const c=tourCalc(t,it.qty,it.people); const parts=[];
+    t.options.forEach(o=>{ const q=+(it.qty[o.k]||0); if(q) parts.push(t.onRequest?`${o.l}: ${q}`:`${o.l}${o.s?` (${o.s})`:""}: ${q} × ${fmt(o.p)}`); });
+    if(c.extra) parts.push(`Extra people: ${c.extra} × ${fmt(t.extra.price)}`);
+    (it.sel||[]).forEach(x=>parts.push(x)); if(it.session) parts.push(it.session);
+    return {title:t.title, img:t.img, total:c.tot, parts, item:t, req:!!t.onRequest};
+  }
+  const v=vehById(it.kind,it.id); if(!v) return null;
+  return {title:`${it.kind==="bike"?"Bike":"Car"} №${v.id} — ${v.model}`, img:v.img, total:v.price*it.days, parts:[`${it.days} day${it.days>1?"s":""} × ${fmt(v.price)}`,`Start: ${it.start}`], item:v};
+}
+const cartTotal = () => cart.reduce((s,it)=>s+((lineInfo(it)||{}).total||0),0);
+function addToCart(it){
+  it.uid = Date.now().toString(36)+Math.random().toString(36).slice(2,6);
+  cart.push(it); saveCart();
+  const b=$("#cartBtn"); b.classList.remove("bump"); void b.offsetWidth; b.classList.add("bump");
+  toast(`Added to cart · <a href="#cart">View cart (${cart.length})</a>`);
+}
+let tt; function toast(h){ const t=$("#toast"); t.innerHTML=h; t.classList.add("show"); clearTimeout(tt); tt=setTimeout(()=>t.classList.remove("show"),3200); }
+
+/* ---------- icons ---------- */
+const IC = {
+  clock:'<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg>',
+  chev:'<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4"><path d="m6 9 6 6 6-6"/></svg>',
+  bike:'<svg viewBox="0 0 120 80" fill="none" stroke="currentColor" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"><circle cx="24" cy="58" r="14"/><circle cx="96" cy="58" r="14"/><path d="M24 58h30l10-20h18l14 20"/><path d="M54 58 46 36H30"/><path d="M78 20h10l6 18"/><path d="M60 38h22"/></svg>',
+  car:'<svg viewBox="0 0 120 80" fill="none" stroke="currentColor" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"><path d="M10 56V44l10-6 14-16h44l16 16 14 6v12z"/><path d="M38 24 30 38h60l-14-14"/><circle cx="32" cy="58" r="9"/><circle cx="88" cy="58" r="9"/></svg>'
+};
+
+/* ---------- tour cards ---------- */
+function fromPrice(t){
+  if(t.onRequest) return `<small>Price on request</small>`;
+  const o0=t.options[0];
+  if(t.charter) return `${fmt(o0.p)} <small>/ boat</small>`;
+  if(o0.k==="single") return `${fmt(o0.p)} <small>/ person</small>`;
+  const lab = o0.k==="adult_rider"?"rider":(o0.k==="adult"?"adult":"person");
+  return `${fmt(o0.p)} <small>/ ${lab}</small>`;
+}
+function tourCard(t){
+  const off = t.available===false;
+  return `<article class="card" data-id="${esc(t.id)}">
+    <div class="ph"><img loading="lazy" src="${esc(imgSrc(t.img))}" alt="${esc(t.title)}">${off?'<span class="badge off">Temporarily unavailable</span>':(t.charter||t.onRequest?'<span class="badge">Private</span>':'')}</div>
+    <div class="bd">
+      <div class="kind">${esc(t.kind||"")}</div>
+      <h3>${esc(t.title)}</h3>
+      <p class="sum">${esc(t.summary||"")}</p>
+      <div class="meta"><span>${IC.clock}${esc(t.time||"")}</span></div>
+      <div class="row"><div class="price">${fromPrice(t)}</div><button class="more" type="button" aria-expanded="false">Details ${IC.chev}</button></div>
+    </div>
+    <div class="ex"><div></div></div>
+  </article>`;
+}
+function tourDetail(t){
+  const off = t.available===false;
+  const g = galleryOf(t);
+  const opts = t.options.map((o,i)=>{
+    const def = i===0 ? (t.charter?1:(t.maxPeople&&t.maxPeople<2?1:(o.k==="pair"||o.k==="single"?1:2))) : 0;
+    return `<div class="opt"><div class="l"><b>${esc(o.l)}</b><span>${o.s?esc(o.s):""}${t.onRequest?"":(o.s?" · ":"")+fmt(o.p)}</span></div>
+     <div class="step" data-k="${esc(o.k)}"><button type="button" data-d="-1" aria-label="Less">−</button><output>${def}</output><button type="button" data-d="1" aria-label="More">+</button></div></div>`;}).join("");
+  const sels = selsOf(t);
+  const pplLabel = t.extra ? `People (${t.extra.over} included, +${fmt(t.extra.price)} per extra person)` : `Number of people (max ${t.maxPeople||5})`;
+  return `<div class="exin">
+    <div>
+      <div class="viewer"><div class="vmain"><img src="${esc(imgSrc(g[0]))}" alt="${esc(t.title)}">${g.length>1?`<button type="button" class="vnav vprev" aria-label="Previous photo">‹</button><button type="button" class="vnav vnext" aria-label="Next photo">›</button>`:""}<span class="vcount">1 / ${g.length}</span><button type="button" class="vzoom" aria-label="Full screen">⤢</button></div>
+      ${g.length>1?`<div class="vthumbs">${g.map((n,i)=>`<button type="button" data-i="${i}" class="${i?"":"on"}"><img loading="lazy" src="${esc(imgSrc(n))}" alt=""></button>`).join("")}</div>`:""}</div>
+      ${t.desc?`<p class="desc">${esc(t.desc)}</p>`:""}
+      <h4>Program${t.time?` · ${esc(t.time)}`:""}</h4>
+      <ol class="prog">${(t.program||[]).map(([a,b])=>`<li>${a?`<b>${esc(a)}</b>`:""}${esc(b)}</li>`).join("")}</ol>
+      ${t.included&&t.included.length?`<h4>Included</h4><ul class="inc">${t.included.map(i=>`<li>${esc(i)}</li>`).join("")}</ul>`:""}
+      ${t.bring&&t.bring.length?`<h4>What to bring</h4><ul class="inc">${t.bring.map(i=>`<li style="background:#fff;border:1px solid var(--line);color:var(--ink)">${esc(i)}</li>`).join("")}</ul>`:""}
+      ${t.notes&&t.notes.length?`<h4>Good to know</h4><ul class="notes">${t.notes.map(i=>`<li>${esc(i)}</li>`).join("")}</ul>`:""}
+    </div>
+    <div class="book">
+      <h4>${t.charter?"Book the boat":(t.onRequest?"Request a quote":"Guests")}</h4>
+      ${opts}
+      ${t.charter?`<label class="f">${pplLabel}</label><div class="step" data-k="people" style="width:max-content"><button type="button" data-d="-1">−</button><output>2</output><button type="button" data-d="1">+</button></div>`:""}
+      ${sels.map((s,i)=>`<label class="f">${esc(s.l)}</label><select data-sel="${i}">${s.o.map(x=>`<option>${esc(x)}</option>`).join("")}</select>`).join("")}
+      <label class="f">Preferred date</label><input type="date" data-date min="${today()}">
+      <div class="tot"><span>Total</span><b data-tot>—</b></div>
+      <p class="warn" data-warn></p>
+      <button class="btn primary block" type="button" data-add ${off?"disabled":""}>${off?"Unavailable":(t.onRequest?"Add request to Cart":"Add to Cart")}</button>
+      <button class="more" type="button" data-close style="margin:10px auto 0;display:flex">Hide details</button>
+    </div>
+  </div>`;
+}
+const isHQ = n => /^(loc-|sup-|act-|kohmaa|pp-|em-|kr-|w-)/.test(n) || /(\/v\/|os-v-)/.test(n);
+function galleryOf(t){
+  const all=[...new Set([t.img,...(t.gallery||[])].filter(Boolean))];
+  const hq=all.filter(isHQ);
+  if(hq.length>=2){ const lq=all.filter(n=>!isHQ(n)); return [...hq, ...(lq.includes(t.img)?[t.img]:[])]; }
+  return all;
+}
+function wireViewer(root, list){
+  const v=$(".viewer",root); if(!v) return; let i=0;
+  const img=$(".vmain img",v), cnt=$(".vcount",v), th=$$(".vthumbs button",v);
+  if(img.complete) fitV(img); else img.onload=()=>fitV(img);
+  const show=k=>{ i=(k+list.length)%list.length; img.classList.add("fade"); setTimeout(()=>{ img.src=list[i]; img.onload=()=>{img.classList.remove("fade"); fitV(img);}; },120); cnt.textContent=`${i+1} / ${list.length}`; th.forEach((b,j)=>b.classList.toggle("on",j===i)); const a=th[i]; if(a) a.scrollIntoView({block:"nearest",inline:"nearest",behavior:"smooth"}); };
+  const p=$(".vprev",v), n=$(".vnext",v); if(p) p.onclick=e=>{e.stopPropagation();show(i-1)}; if(n) n.onclick=e=>{e.stopPropagation();show(i+1)};
+  th.forEach(b=>b.onclick=()=>show(+b.dataset.i));
+  const open=()=>openLB(list,i); $(".vzoom",v).onclick=open; img.onclick=open;
+  swipe($(".vmain",v),()=>show(i+1),()=>show(i-1));
+}
+function fitV(img){ const p=img.naturalHeight>img.naturalWidth*1.05; img.classList.toggle("tall",p); img.parentElement.style.setProperty("--bgimg",p?`url("${img.src}")`:"none"); }
+function swipe(el,next,prev){ let x0=null; el.addEventListener("touchstart",e=>{x0=e.touches[0].clientX},{passive:true}); el.addEventListener("touchend",e=>{ if(x0===null) return; const dx=e.changedTouches[0].clientX-x0; if(Math.abs(dx)>40){ dx<0?next():prev(); } x0=null; }); }
+let LB={list:[],i:0};
+function openLB(list,i){ LB={list,i}; const lb=$("#lb"); lb.classList.add("show"); document.body.style.overflow="hidden"; lbShow(); }
+function lbShow(){ const lb=$("#lb"); $("img",lb).src=LB.list[LB.i]; $(".lbcount",lb).textContent=`${LB.i+1} / ${LB.list.length}`; $$(".lbnav",lb).forEach(b=>b.style.display=LB.list.length>1?"":"none"); }
+function lbGo(d){ LB.i=(LB.i+d+LB.list.length)%LB.list.length; lbShow(); }
+function lbClose(){ $("#lb").classList.remove("show"); document.body.style.overflow=""; }
+function wireCard(card){
+  const t = tourById(card.dataset.id);
+  const btn = $(".more",card), host=$(".ex>div",card);
+  const toggle = (open)=>{
+    if(open && !host.innerHTML){ host.innerHTML = tourDetail(t); wireBook(card,t); }
+    card.classList.toggle("open",open); btn.setAttribute("aria-expanded",open); btn.innerHTML=(open?"Hide ":"Details ")+IC.chev;
+    if(open) setTimeout(()=>card.scrollIntoView({behavior:"smooth",block:"start"}),80);
+  };
+  btn.onclick = ()=>toggle(!card.classList.contains("open"));
+  $(".ph",card).onclick = ()=>{ if(!card.classList.contains("open")) toggle(true); };
+  card._toggle = toggle;
+}
+function wireBook(card,t){
+  const steps = $$(".step",card), totEl=$("[data-tot]",card), warn=$("[data-warn]",card), addB=$("[data-add]",card);
+  const read = ()=>{ const q={}; steps.forEach(s=>q[s.dataset.k]=+$("output",s).value); return q; };
+  const calc = ()=>{
+    const q=read(); const c=tourCalc(t,q,q.people); let msg="";
+    if(t.charter){ if(!q.boat) msg="Choose the boat."; }
+    else if(!c.ppl) msg="Add at least one guest.";
+    if(t.maxPeople && !t.charter && c.ppl>t.maxPeople) msg=`Maximum ${t.maxPeople} people for this program.`;
+    totEl.textContent = money(t,c.tot); warn.textContent=msg; addB.disabled = !!msg || t.available===false;
+    return {q,ok:!msg};
+  };
+  steps.forEach(s=>{
+    const out=$("output",s);
+    $$("button",s).forEach(b=>b.onclick=()=>{
+      let max = 30; if(s.dataset.k==="boat") max=1; if(s.dataset.k==="people") max=t.maxPeople||5;
+      if(t.maxPeople&&!t.charter) max=t.maxPeople;
+      const min = s.dataset.k==="people"?1:0;
+      out.value = Math.max(min,Math.min(max,+out.value + +b.dataset.d)); calc();
+    });
+  });
+  addB.onclick = ()=>{
+    const r=calc(); if(!r.ok) return;
+    const qty={}; t.options.forEach(o=>{ if(r.q[o.k]) qty[o.k]=r.q[o.k]; });
+    const sel=selsOf(t).map((s,i)=>`${s.l}: ${$(`[data-sel="${i}"]`,card).value}`);
+    addToCart({kind:"tour",id:t.id,qty,people:t.charter?r.q.people:undefined, sel, date:$("[data-date]",card).value||""});
+  };
+  $("[data-close]",card).onclick=()=>card._toggle(false);
+  wireViewer(card, galleryOf(t).map(imgSrc));
+  calc();
+}
+let curCat="all";
+function renderTours(){
+  const ch=$("#chips");
+  ch.innerHTML = [{id:"all",name:"All tours"},...CATEGORIES].map(c=>`<button class="chip ${c.id===curCat?"on":""}" data-c="${c.id}">${esc(c.name)}</button>`).join("");
+  $$(".chip",ch).forEach(b=>b.onclick=()=>{curCat=b.dataset.c; renderTours();});
+  const list = CAT.tours.filter(t=>curCat==="all"||t.cat===curCat);
+  $("#tourGrid").innerHTML = list.map(tourCard).join("");
+  $$("#tourGrid .card").forEach(wireCard);
+}
+function renderHome(){
+  const pick = {sea:"pp-1",mangrove:"sup-kayak-012",sightseeing:"loc-lighthouse-0",fishing:"loc-kohma-0",jungle:"w-np-aerial",elephant:"sup-ele-010",adventure:"atvB",cooking:"sup-cook-000"};
+  $("#cats").innerHTML = CATEGORIES.map(c=>{ const n=CAT.tours.filter(t=>t.cat===c.id).length;
+    return `<button class="cat" data-c="${c.id}"><img loading="lazy" src="https://cdn.jsdelivr.net/gh/onestop-lanta/onestop-img@58c5d03/img/os-${pick[c.id]}.jpg" alt=""><span>${esc(c.name)}<small>${n} option${n!==1?"s":""}</small></span></button>`;}).join("");
+  $$("#cats .cat").forEach(b=>b.onclick=()=>{curCat=b.dataset.c; location.hash="tours"; });
+  $("#popular").innerHTML = CAT.tours.filter(t=>t.popular).slice(0,6).map(tourCard).join("");
+  $$("#popular .card").forEach(wireCard);
+  // rentals teaser
+  const teaser = $("#rentTeaser");
+  teaser.innerHTML = `
+   <a class="card" href="#bikes" style="text-decoration:none"><div class="ph" style="display:grid;place-items:center;background:#fff"><img src="https://cdn.jsdelivr.net/gh/onestop-lanta/onestop-img@58c5d03/img/os-v-24.jpg" alt="" style="width:62%;height:auto;object-fit:contain"></div><div class="bd"><div class="kind">Motorbike rental</div><h3>Delivered to your hotel or villa</h3><p class="sum">Pick the exact bike, a start date and number of days.</p><div class="row"><div class="price"><small>from</small> ${fmt(Math.min(...CAT.bikes.map(b=>b.price)))} <small>/ day</small></div><span class="more">View bikes →</span></div></div></a>
+   <a class="card" href="#cars" style="text-decoration:none"><div class="ph" style="display:grid;place-items:center;background:#fff"><img src="https://cdn.jsdelivr.net/gh/onestop-lanta/onestop-img@58c5d03/img/os-v-1.jpg" alt="" style="width:66%;height:auto;object-fit:contain"></div><div class="bd"><div class="kind">Car rental</div><h3>Explore the whole island</h3><p class="sum">Choose a specific car and add it to the same cart as your tours.</p><div class="row"><div class="price"><small>from</small> ${fmt(Math.min(...CAT.cars.map(b=>b.price)))} <small>/ day</small></div><span class="more">View cars →</span></div></div></a>`;
+}
+
+/* ---------- vehicles ---------- */
+let bikeBand="all";
+function renderVeh(kind){
+  let list = kind==="bike"?CAT.bikes:CAT.cars; const grid=$(kind==="bike"?"#bikeGrid":"#carGrid");
+  const hold=$(kind==="bike"?"#bikesDemo":"#carsDemo");
+  if(kind==="bike"){
+    const bands=[["all","All bikes"],["s","Scooters up to ฿300"],["m","฿450 – ฿650"],["l","฿700 and up"]];
+    hold.innerHTML=`<div class="chips">${bands.map(([k,n])=>`<button class="chip ${bikeBand===k?"on":""}" data-b="${k}">${n}</button>`).join("")}</div>`;
+    $$("[data-b]",hold).forEach(b=>b.onclick=()=>{bikeBand=b.dataset.b; renderVeh("bike");});
+    list=list.filter(v=>bikeBand==="all"||(bikeBand==="s"&&v.price<=300)||(bikeBand==="m"&&v.price>300&&v.price<700)||(bikeBand==="l"&&v.price>=700));
+  } else hold.innerHTML="";
+  grid.innerHTML = list.map(v=>{ const off=v.available===false;
+    return `<div class="veh" data-id="${esc(v.id)}">
+      <div class="ph">${v.img?`<img loading="lazy" src="${esc(imgSrc(v.img))}" alt="${esc(v.model)}">`:`<div style="width:60%;color:var(--sea)">${IC[kind]}</div>`}<span class="num">${kind==="bike"?"Bike":"Car"} №${esc(v.id)}</span>${off?'<span class="badge off">Not available</span>':""}</div>
+      <div class="bd"><h3>${esc(v.model)}</h3>
+        <div class="price" style="margin:2px 0 4px">${fmt(v.price)} <small>/ day</small></div>
+        <div class="two"><div><label class="f">Start date</label><input type="date" data-s min="${today()}" value="${today()}"></div>
+        <div><label class="f">Days</label><div class="step" data-k="days"><button type="button" data-d="-1">−</button><output>3</output><button type="button" data-d="1">+</button></div></div></div>
+        <div class="tot" style="margin:10px 0 8px"><span>Total</span><b data-t>${fmt(v.price*3)}</b></div>
+        <button class="btn primary block" data-add ${off?"disabled":""}>${off?"Unavailable":"Add to Cart"}</button>
+      </div></div>`;}).join("");
+  $$(".veh",grid).forEach(el=>{
+    const v=vehById(kind,el.dataset.id), out=$("output",el);
+    $$(".step button",el).forEach(b=>b.onclick=()=>{ out.value=Math.max(1,Math.min(90,+out.value + +b.dataset.d)); $("[data-t]",el).textContent=fmt(v.price*out.value); });
+    $("[data-add]",el).onclick=()=>{ const s=$("[data-s]",el).value; if(!s){toast("Choose a start date");return;}
+      addToCart({kind,id:v.id,start:s,days:+out.value}); };
+  });
+}
+
+/* ---------- cart view ---------- */
+function renderCart(){
+  const body=$("#cartBody");
+  if(!cart.length){ body.innerHTML=`<div class="panel empty"><h2 style="font-size:28px">Your cart is empty</h2><p class="muted">Add tours or rentals and they will appear here.</p><a class="btn sea" href="#tours">Browse tours</a></div>`; return; }
+  body.innerHTML = `<div class="cartgrid"><div class="panel" id="ciList">${cart.map(it=>{
+    const L=lineInfo(it); if(!L) return "";
+    const pic = it.kind==="tour"?`<img src="${esc(imgSrc(L.img))}" alt="">`:(L.img?`<img class="v" src="${esc(imgSrc(L.img))}" alt="">`:`<div class="ico">${IC[it.kind]}</div>`);
+    let ctl="";
+    if(it.kind==="tour"){
+      const t=L.item;
+      ctl = t.options.map(o=>`<span>${esc(o.l)} <span class="step" style="display:inline-flex;vertical-align:middle" data-k="${esc(o.k)}"><button data-d="-1">−</button><output>${it.qty[o.k]||0}</output><button data-d="1">+</button></span></span>`).join("")
+        + `<span>Date: <input type="date" data-date value="${esc(it.date||"")}" min="${today()}"></span>`;
+      if(t.charter) ctl+=`<span>People <span class="step" style="display:inline-flex;vertical-align:middle" data-k="people"><button data-d="-1">−</button><output>${it.people}</output><button data-d="1">+</button></span></span>`;
+    } else {
+      ctl = `<span>Start <input type="date" data-start value="${esc(it.start)}" min="${today()}"></span><span>Days <span class="step" style="display:inline-flex;vertical-align:middle" data-k="days"><button data-d="-1">−</button><output>${it.days}</output><button data-d="1">+</button></span></span>`;
+    }
+    return `<div class="ci" data-uid="${it.uid}">${pic}<div><h3>${esc(L.title)}</h3><div class="lines">${L.parts.map(esc).join("<br>")}</div><div class="ctl">${ctl}<button class="rm" data-rm>Remove</button></div></div><div class="amt">${L.req?"On request":fmt(L.total)}</div></div>`;
+  }).join("")}</div>
+  <div class="panel sumbox">${summaryHtml()}<a class="btn primary block" href="#checkout" style="margin-top:16px">Checkout</a><a class="btn ghost block" href="#tours" style="margin-top:8px">Add more services</a></div></div>`;
+  $$(".ci",body).forEach(row=>{
+    const it=cart.find(c=>c.uid===row.dataset.uid);
+    $$(".step",row).forEach(s=>$$("button",s).forEach(b=>b.onclick=()=>{
+      const k=s.dataset.k, d=+b.dataset.d;
+      if(k==="days"){ it.days=Math.max(1,Math.min(90,it.days+d)); }
+      else if(k==="people"){ const t=tourById(it.id); it.people=Math.max(1,Math.min(t.maxPeople||5,it.people+d)); }
+      else {
+        const t=tourById(it.id); const nv=Math.max(0,Math.min(t.charter?1:(t.maxPeople||30),(it.qty[k]||0)+d));
+        const test={...it.qty,[k]:nv}; const ppl=t.options.reduce((a,o)=>a+(test[o.k]||0)*(o.k==="pair"?2:1),0);
+        if(!t.charter && t.maxPeople && ppl>t.maxPeople){ toast(`Maximum ${t.maxPeople} people for this program`); return; }
+        if(ppl===0){ toast("At least one guest — or remove the item"); return; }
+        it.qty[k]=nv;
+      }
+      saveCart(); renderCart();
+    }));
+    const dt=$("[data-date]",row); if(dt) dt.onchange=()=>{it.date=dt.value; saveCart();};
+    const st=$("[data-start]",row); if(st) st.onchange=()=>{it.start=st.value||it.start; saveCart(); renderCart();};
+    $("[data-rm]",row).onclick=()=>{ cart=cart.filter(c=>c!==it); saveCart(); renderCart(); };
+  });
+}
+function summaryHtml(){
+  return `<h3 style="font-size:22px;margin-bottom:10px">Order summary</h3>${cart.map(it=>{const L=lineInfo(it);return L?`<div class="ln"><span>${esc(L.title)}</span><span>${L.req?"On request":fmt(L.total)}</span></div>`:"";}).join("")}
+   <div class="grand"><span>Total</span><span>${fmt(cartTotal())}</span></div>${cart.some(it=>(lineInfo(it)||{}).req)?'<p class="muted" style="font-size:12.5px;margin:8px 0 0">+ private trips priced on request — we will send the quote.</p>':""}<p class="muted" style="font-size:12.5px;margin:8px 0 0">Payment in cash to our representative or at our tour desk. National park / village fees, where noted, are paid separately.</p>`;
+}
+
+/* ---------- checkout ---------- */
+function buildMessage(c){
+  const L=[]; L.push("NEW BOOKING REQUEST"); L.push(`Customer: ${c.first} ${c.last}`);
+  if(c.phone) L.push(`Phone: ${c.phone}`); if(c.email) L.push(`E-mail: ${c.email}`); if(c.stay) L.push(`Staying at: ${c.stay}`); L.push("");
+  cart.forEach((it,i)=>{
+    const I=lineInfo(it); if(!I) return;
+    if(it.kind==="tour"){
+      const t=I.item; L.push(`${i+1}. ${t.title}`);
+      t.options.forEach(o=>{ if(it.qty[o.k]) L.push(`   * ${o.l}${o.s?` (${o.s})`:""}: ${it.qty[o.k]}`); });
+      if(t.charter) L.push(`   * People: ${it.people}`);
+      (it.sel||[]).forEach(x=>L.push(`   * ${x}`)); if(it.session) L.push(`   * Session: ${it.session}`);
+      L.push(`   * Date: ${it.date||"to be agreed"}`);
+      L.push(`   * Total: ${t.onRequest?"price on request":fmt(I.total)}`);
+    } else {
+      L.push(`${i+1}. ${it.kind==="bike"?"Bike":"Car"} №${I.item.id} — ${I.item.model}`);
+      L.push(`   * Type: ${it.kind==="bike"?"Motorbike rental":"Car rental"}`);
+      L.push(`   * Start date: ${it.start}`); L.push(`   * Rental period: ${it.days} day${it.days>1?"s":""}`);
+      L.push(`   * Price: ${fmt(I.item.price)}/day · Total: ${fmt(I.total)}`);
+    }
+  });
+  L.push(""); L.push(`TOTAL ORDER: ${fmt(cartTotal())}${cart.some(it=>(lineInfo(it)||{}).req)?" + private trips on request":""}`);
+  if(c.comment){ L.push(""); L.push(`Comments: ${c.comment}`); }
+  return L.join("\n");
+}
+function renderCheckout(){
+  if(!cart.length){ location.hash="cart"; return; }
+  $("#coSum").innerHTML = summaryHtml() + `<a class="btn ghost block" href="#cart" style="margin-top:14px">Edit cart</a>`;
+  const saved=store.get("lt_customer",{}); ["fn","ln","ph","em","stay"].forEach(k=>{ if(saved[k]&&!$("#"+k).value) $("#"+k).value=saved[k]; });
+}
+$("#coForm").addEventListener("submit", async e=>{
+  e.preventDefault();
+  const c={first:$("#fn").value.trim(), last:$("#ln").value.trim(), phone:$("#ph").value.trim(), email:$("#em").value.trim(), stay:$("#stay").value.trim(), comment:$("#cm").value.trim()};
+  if(!c.first||!c.last){ $("#coWarn").textContent="Please enter your first and last name."; return; }
+  if(c.phone.replace(/\D/g,"").length<6){ $("#coWarn").textContent="Please enter a phone or WhatsApp number so we can confirm your booking."; return; }
+  if(!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(c.email)){ $("#coWarn").textContent="Please enter a valid e-mail — we send your booking confirmation there."; return; }
+  if(!cart.length){ location.hash="cart"; return; }
+  $("#coWarn").textContent="";
+  store.set("lt_customer",{fn:c.first,ln:c.last,ph:c.phone,em:c.email,stay:c.stay});
+  const msg = buildMessage(c);
+  const order = {id:"OS-"+Date.now().toString(36).toUpperCase().slice(-6), at:new Date().toISOString(), customer:c, items:clone(cart), total:cartTotal(), text:msg};
+  const btn=$("#placeBtn"); btn.disabled=true; btn.textContent="Sending…";
+  let sent=false;
+  if(CFG.web3formsKey){
+    try{
+      const body={access_key:CFG.web3formsKey, subject:`New booking ${order.id} — ${c.first} ${c.last} — ${fmt(order.total)}`, from_name:CFG.brand,
+        name:`${c.first} ${c.last}`, phone:c.phone, message:`Order ${order.id}\n\n`+msg, botcheck:""};
+      if(c.email){ body.email=c.email; body.replyto=c.email; }
+      const r = await fetch("https://api.web3forms.com/submit",{method:"POST",headers:{"Content-Type":"application/json",Accept:"application/json"},body:JSON.stringify(body),signal:AbortSignal.timeout(15000)});
+      const j = await r.json().catch(()=>({})); sent = r.ok && j.success!==false;
+    }catch(err){ sent=false; }
+  }
+  // confirmation e-mail to the customer (copy to the shop via BCC in the EmailJS template)
+  const EJ=CFG.emailjs||{}; order.mailed=false;
+  if(EJ.publicKey&&EJ.serviceId&&EJ.templateId){
+    try{
+      const r=await fetch("https://api.emailjs.com/api/v1.0/email/send",{method:"POST",headers:{"Content-Type":"application/json"},signal:AbortSignal.timeout(15000),
+        body:JSON.stringify({service_id:EJ.serviceId,template_id:EJ.templateId,user_id:EJ.publicKey,template_params:emailParams(order)})});
+      order.mailed=r.ok; if(r.ok) sent=true;
+    }catch(err){}
+  }
+  // order log → Google Sheets (Apps Script web app)
+  if(CFG.ordersSheetUrl){
+    try{
+      await fetch(CFG.ordersSheetUrl,{method:"POST",mode:"no-cors",headers:{"Content-Type":"text/plain;charset=utf-8"},signal:AbortSignal.timeout(12000),
+        body:JSON.stringify({id:order.id,at:order.at,customer:c,total:order.total,onRequest:order.items.some(it=>(lineInfo(it)||{}).req),text:order.text,
+          items:order.items.map(it=>{const L=lineInfo(it)||{};return {type:it.kind==="tour"?"Tour":(it.kind==="bike"?"Motorbike":"Car"),title:L.title||"",details:(L.parts||[]).join("; "),
+            date:it.kind==="tour"?(it.date||""):(it.start||""),days:it.days||"",people:it.kind==="tour"?Object.values(it.qty||{}).reduce((a,b)=>a+b,0)+(it.people?` (boat for ${it.people})`:""):"",amount:L.req?"":L.total};})})});
+      sent=true;
+    }catch(err){}
+  }
+  btn.disabled=false; btn.textContent="Place Order";
+  order.sent=sent;
+  const orders = store.get("lt_orders",[]); orders.unshift(order); store.set("lt_orders",orders.slice(0,200));
+  store.set("lt_last_order", order);
+  cart=[]; saveCart(); $("#cm").value="";
+  showDone(order);
+});
+function emailParams(order){
+  const c=order.customer, rows=[];
+  order.items.forEach((it,i)=>{ const L=lineInfo(it); if(!L) return;
+    const det=[...L.parts]; if(it.kind==="tour") det.push("Date: "+(it.date||"to be confirmed"));
+    rows.push(`<tr><td style="padding:12px 0;border-bottom:1px solid #E2D8C7;vertical-align:top"><b style="font-size:15px;color:#1E1A16">${i+1}. ${esc(L.title)}</b><br><span style="font-size:13px;color:#6F665B;line-height:1.6">${det.map(esc).join("<br>")}</span></td><td style="padding:12px 0 12px 12px;border-bottom:1px solid #E2D8C7;text-align:right;vertical-align:top;white-space:nowrap;font-weight:600">${L.req?"On request":fmt(L.total)}</td></tr>`); });
+  const fees=[...new Set(order.items.flatMap(it=>{const t=it.kind==="tour"&&tourById(it.id);return t?(t.notes||[]).filter(n=>/fee/i.test(n)):[]}))];
+  return { to_email:c.email, to_name:`${c.first} ${c.last}`, first_name:c.first, order_id:order.id,
+    order_total:fmt(order.total)+(order.items.some(it=>(lineInfo(it)||{}).req)?" + private trips on request":""),
+    order_html:`<table width="100%" cellpadding="0" cellspacing="0" style="border-collapse:collapse;font-family:Arial,sans-serif">${rows.join("")}</table>`,
+    fees_html: fees.length?`<p style="font-size:13px;color:#6F665B;margin:14px 0 0"><b>Extra fees paid on the day:</b><br>${fees.map(esc).join("<br>")}</p>`:"",
+    order_text:order.text, customer_phone:c.phone, customer_stay:c.stay||"—", customer_comment:c.comment||"—",
+    shop_address:CFG.shopAddressLine, shop_whatsapp:CFG.phoneDisplay, shop_whatsapp_link:`https://wa.me/${CFG.whatsapp}`, shop_email:CFG.email, brand:CFG.brand };
+}
+function showDone(order){
+  location.hash="done"; $("#toast").classList.remove("show");
+  const preview = !CFG.web3formsKey && !(CFG.emailjs&&CFG.emailjs.publicKey) && /claude|localhost|^$|file/.test(location.hostname+location.protocol.replace(/[^a-z]/g,""));
+  const ok = order.sent || preview;
+  const first = (order.customer&&order.customer.first)||"";
+  $("#waLink").href=`https://wa.me/${CFG.whatsapp}?text=${encodeURIComponent(order.text)}`;
+  $("#waChat").href=`https://wa.me/${CFG.whatsapp}?text=${encodeURIComponent("Hello! About my booking "+order.id)}`;
+  $("#doneTitle").textContent = first ? `Thank you, ${first}!` : "Thank you!";
+  $("#doneEyebrow").textContent = ok ? `Booking request ${order.id} received` : `Booking ${order.id} — one more step`;
+  $("#doneTxt").innerHTML = ok
+    ? `We've received your booking request. After checking availability, our team will contact you <b>shortly via WhatsApp or phone</b> to confirm your booking and pick-up time.${order.customer&&order.customer.email?"":""}`
+    : `Your booking is ready but hasn't reached us yet. Please send it with the WhatsApp button below and we'll confirm shortly.`;
+  $("#doneFallback").style.display = ok ? "none" : "block";
+  $("#doneSteps").style.display = ok ? "" : "none";
+  $(".done-ic").classList.toggle("warn", !ok);
+  $("#orderTxt").textContent = order.text;
+  $("#vId").textContent = order.id;
+  if(order.mailed) $("#doneTxt").innerHTML += ` A confirmation with all details has been sent to <b>${esc(order.customer.email)}</b>.`;
+}
+
+/* ---------- contact ---------- */
+function renderContact(){
+  const wa=`https://wa.me/${CFG.whatsapp}`;
+  $("#contactBox").innerHTML = `
+   <a class="btn wa" href="${wa}" target="_blank" rel="noopener">WhatsApp ${esc(CFG.phoneDisplay)}</a>
+   <div><b>Phone:</b> <a href="tel:+${esc(CFG.whatsapp)}">${esc(CFG.phoneDisplay)}</a></div>
+   <div><b>E-mail:</b> <a href="mailto:${esc(CFG.email)}">${esc(CFG.email)}</a></div>
+   <div><b>Address:</b> ${esc(CFG.address)}</div>`;
+  $("#fContact").innerHTML = `<a href="${wa}" target="_blank" rel="noopener">WhatsApp ${esc(CFG.phoneDisplay)}</a><br>${esc(CFG.email)}<br>${esc(CFG.address)}`;
+}
+
+/* ---------- admin ---------- */
+let admTab="tours", admOk=false;
+function renderAdmin(){
+  const B=$("#admBody");
+  if(!admOk){ B.innerHTML=`<div class="panel" style="padding:22px;max-width:380px"><label class="f">Admin PIN</label><input type="password" id="pin"><button class="btn sea block" style="margin-top:12px" id="pinGo">Enter</button></div>`;
+    $("#pinGo").onclick=()=>{ if($("#pin").value===CFG.adminPin){admOk=true;renderAdmin();} else toast("Wrong PIN"); }; return; }
+  const tabs=`<div class="tabs">${[["tours","Tours"],["bikes","Motorbikes"],["cars","Cars"],["orders","Orders"],["export","Export / reset"]].map(([k,n])=>`<button class="chip ${admTab===k?"on":""}" data-t="${k}">${n}</button>`).join("")}</div>`;
+  let html="";
+  if(admTab==="tours"){
+    html=`<div class="panel" style="padding:12px;overflow:auto"><table><tr><th>On</th><th>Tour</th><th>Prices (${CUR})</th><th>Popular</th><th></th></tr>${CAT.tours.map((t,i)=>`<tr data-i="${i}">
+      <td><input type="checkbox" data-f="available" ${t.available!==false?"checked":""} style="width:auto"></td>
+      <td><input data-f="title" value="${esc(t.title)}" style="min-width:240px"><div class="muted" style="font-size:12px">${esc(t.cat)} · ${esc(t.id)}</div></td>
+      <td>${t.options.map((o,j)=>`<label style="display:inline-block;margin:2px 6px 2px 0;font-size:12px">${esc(o.l)}<br><input data-o="${j}" type="number" value="${o.p}" style="width:90px"></label>`).join("")}</td>
+      <td><input type="checkbox" data-f="popular" ${t.popular?"checked":""} style="width:auto"></td>
+      <td><button class="more" data-edit>Edit text</button> <button class="rm" data-del style="background:none;border:0;color:var(--coral-d)">Delete</button></td></tr>
+      <tr data-x="${i}" style="display:none"><td></td><td colspan="4"><label class="f">Short info</label><input data-f="summary" value="${esc(t.summary||"")}"><label class="f">Description</label><textarea data-f="desc" rows="4">${esc(t.desc||"")}</textarea><label class="f">Program (one step per line)</label><textarea data-prog rows="5">${esc((t.program||[]).map(p=>(p[0]?p[0]+" | ":"")+p[1]).join("\n"))}</textarea><label class="f">Included (one per line)</label><textarea data-list="included" rows="3">${esc((t.included||[]).join("\n"))}</textarea><label class="f">Photo</label><input type="file" accept="image/*" data-photo></td></tr>`).join("")}</table>
+      <button class="btn sea" id="newTour" style="margin:12px 8px">+ Add tour</button></div>`;
+  } else if(admTab==="bikes"||admTab==="cars"){
+    const list=CAT[admTab];
+    html=`<div class="panel" style="padding:12px;overflow:auto"><table><tr><th>On</th><th>№</th><th>Model</th>${admTab==="cars"?"<th>Seats</th>":""}<th>${CUR}/day</th><th>Photo</th><th></th></tr>${list.map((v,i)=>`<tr data-i="${i}">
+      <td><input type="checkbox" data-f="available" ${v.available!==false?"checked":""} style="width:auto"></td>
+      <td><input data-f="id" value="${esc(v.id)}" style="width:80px"></td><td><input data-f="model" value="${esc(v.model)}"></td>
+      ${admTab==="cars"?`<td><input data-f="seats" type="number" value="${esc(v.seats||"")}" style="width:70px"></td>`:""}
+      <td><input data-f="price" type="number" value="${v.price}" style="width:100px"></td>
+      <td><input type="file" accept="image/*" data-photo style="width:180px"></td>
+      <td><button class="rm" data-del style="background:none;border:0;color:var(--coral-d)">Delete</button></td></tr>`).join("")}</table>
+      <button class="btn sea" id="newVeh" style="margin:12px 8px">+ Add ${admTab==="bikes"?"motorbike":"car"}</button></div>`;
+  } else if(admTab==="orders"){
+    const o=store.get("lt_orders",[]);
+    html=`${CFG.ordersSheetLink?`<a class="btn sea" href="${esc(CFG.ordersSheetLink)}" target="_blank" rel="noopener" style="margin-bottom:16px">Open full order log (Google Sheets)</a>`:""}<p class="muted">All customer orders are saved to the Google Sheets order log. Below: orders placed from this browser only.</p>${o.length?o.map(x=>`<details class="panel" style="padding:14px;margin-bottom:10px"><summary><b>${esc(x.id)}</b> · ${esc(new Date(x.at).toLocaleString())} · ${esc(x.customer.first)} ${esc(x.customer.last)} · ${fmt(x.total)}</summary><pre class="msg">${esc(x.text)}</pre></details>`).join(""):'<div class="panel empty">No orders yet</div>'}`;
+  } else {
+    html=`<div class="panel" style="padding:22px"><p>Copy the catalog and replace the data on the live site, or send it to your developer.</p><button class="btn sea" id="cpJson">Copy catalog JSON</button> <button class="btn ghost" id="rst">Reset to brochure defaults</button><textarea id="jsonOut" rows="10" style="margin-top:14px;font:12px ui-monospace,monospace" readonly></textarea></div>`;
+  }
+  B.innerHTML=tabs+html;
+  $$(".tabs .chip",B).forEach(b=>b.onclick=()=>{admTab=b.dataset.t;renderAdmin();});
+  const resizeTo = (file,cb)=>{ const r=new FileReader(); r.onload=()=>{ const im=new Image(); im.onload=()=>{ const s=Math.min(1,900/im.width); const c=document.createElement("canvas"); c.width=im.width*s; c.height=im.height*s; c.getContext("2d").drawImage(im,0,0,c.width,c.height); cb(c.toDataURL("image/jpeg",.8)); }; im.src=r.result; }; r.readAsDataURL(file); };
+  const commit=()=>{ if(!saveCat()) toast("Storage full — use smaller photos"); };
+  if(admTab==="tours"){
+    $$("tr[data-i]",B).forEach(tr=>{
+      const t=CAT.tours[+tr.dataset.i], x=$(`tr[data-x="${tr.dataset.i}"]`,B);
+      $$("[data-f]",tr).forEach(inp=>inp.onchange=()=>{ t[inp.dataset.f]=inp.type==="checkbox"?inp.checked:inp.value; commit(); });
+      $$("[data-o]",tr).forEach(inp=>inp.onchange=()=>{ t.options[+inp.dataset.o].p=+inp.value||0; commit(); });
+      $("[data-edit]",tr).onclick=()=>{ x.style.display=x.style.display==="none"?"":"none"; };
+      $("[data-del]",tr).onclick=()=>{ CAT.tours.splice(+tr.dataset.i,1); commit(); renderAdmin(); };
+      $$("[data-f]",x).forEach(inp=>inp.onchange=()=>{ t[inp.dataset.f]=inp.value; commit(); });
+      $("[data-prog]",x).onchange=e=>{ t.program=e.target.value.split("\n").filter(Boolean).map(l=>{const p=l.split(" | ");return p.length>1?[p[0],p.slice(1).join(" | ")]:["",l];}); commit(); };
+      $("[data-list]",x).onchange=e=>{ t.included=e.target.value.split("\n").map(s=>s.trim()).filter(Boolean); commit(); };
+      $("[data-photo]",x).onchange=e=>{ const f=e.target.files[0]; if(f) resizeTo(f,d=>{t.img=d; commit(); toast("Photo updated");}); };
+    });
+    $("#newTour").onclick=()=>{ CAT.tours.push({id:"t"+Date.now().toString(36),cat:"sea",title:"New tour",kind:"",time:"",img:"",summary:"",program:[],included:[],options:[{k:"adult",l:"Adults",p:0},{k:"child",l:"Children",p:0}],available:false}); commit(); renderAdmin(); };
+  } else if(admTab==="bikes"||admTab==="cars"){
+    const list=CAT[admTab];
+    $$("tr[data-i]",B).forEach(tr=>{ const v=list[+tr.dataset.i];
+      $$("[data-f]",tr).forEach(inp=>inp.onchange=()=>{ v[inp.dataset.f]=inp.type==="checkbox"?inp.checked:(inp.type==="number"?+inp.value:inp.value); v.demo=false; commit(); });
+      $("[data-photo]",tr).onchange=e=>{ const f=e.target.files[0]; if(f) resizeTo(f,d=>{v.img=d; v.demo=false; commit(); toast("Photo updated");}); };
+      $("[data-del]",tr).onclick=()=>{ list.splice(+tr.dataset.i,1); commit(); renderAdmin(); };
+    });
+    $("#newVeh").onclick=()=>{ const max=Math.max(admTab==="bikes"?300:500,...list.map(v=>+v.id||0)); list.push({id:String(max+1),model:"New model",price:0,available:false}); commit(); renderAdmin(); };
+  } else if(admTab==="export"){
+    $("#jsonOut").value=JSON.stringify(CAT,null,1);
+    $("#cpJson").onclick=async()=>{ try{ await navigator.clipboard.writeText($("#jsonOut").value); toast("Catalog copied"); }catch(e){ $("#jsonOut").select(); toast("Press Ctrl/Cmd+C to copy"); } };
+    $("#rst").onclick=()=>{ CAT={v:2,tours:clone(TOURS_DEFAULT),bikes:clone(BIKES_DEFAULT),cars:clone(CARS_DEFAULT)}; commit(); toast("Catalog reset"); renderAdmin(); };
+  }
+}
+
+/* ---------- router ---------- */
+const VIEWS=["home","tours","bikes","cars","cart","checkout","done","contact","admin"];
+function route(){
+  let v=(location.hash||"#home").slice(1); if(!VIEWS.includes(v)) v="home";
+  if(v==="done" && !$("#orderTxt").textContent){ const lo=store.get("lt_last_order",null); if(lo) showDone(lo); else v="home"; }
+  $$(".view").forEach(el=>el.classList.toggle("on",el.id==="v-"+v));
+  $$("[data-nav]").forEach(a=>a.classList.toggle("on",a.dataset.nav===v));
+  if(v==="home") renderHome();
+  if(v==="tours") renderTours();
+  if(v==="bikes") renderVeh("bike");
+  if(v==="cars") renderVeh("car");
+  if(v==="cart") renderCart();
+  if(v==="checkout") renderCheckout();
+  if(v==="admin") renderAdmin();
+  window.scrollTo(0,0);
+}
+window.addEventListener("hashchange",route);
+$("#lb").onclick=e=>{ if(e.target.id==="lb") lbClose(); };
+$(".lbclose").onclick=lbClose; $(".lbprev").onclick=e=>{e.stopPropagation();lbGo(-1)}; $(".lbnext").onclick=e=>{e.stopPropagation();lbGo(1)};
+swipe($("#lb"),()=>lbGo(1),()=>lbGo(-1));
+document.addEventListener("keydown",e=>{ if(!$("#lb").classList.contains("show")) return; if(e.key==="Escape") lbClose(); if(e.key==="ArrowRight") lbGo(1); if(e.key==="ArrowLeft") lbGo(-1); });
+["brandName","fBrand","fBrand2"].forEach(id=>$("#"+id).textContent=CFG.brand);
+$("#fTag").textContent=CFG.tagline; $("#yr").textContent=new Date().getFullYear();
+renderContact(); saveCart(); route();
+})();
+</script>
