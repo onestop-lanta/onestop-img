@@ -43,6 +43,14 @@ function lineInfo(it){
   const v=vehById(it.kind,it.id); if(!v) return null;
   return {title:`${it.kind==="bike"?"Bike":"Car"} №${v.id} — ${v.model}`, img:v.img, total:v.price*it.days, parts:[`${it.days} day${it.days>1?"s":""} × ${fmt(v.price)}`,`Start: ${it.start}`], item:v};
 }
+function logLines(it){
+  if(it.kind==="tour"){ const t=tourById(it.id); if(!t) return [];
+    const c=tourCalc(t,it.qty,it.people); const out=[];
+    t.options.forEach(o=>{ const q=+(it.qty[o.k]||0); if(q) out.push({key:t.id+"|"+o.k,option:o.l,qty:q,price:t.onRequest?"":o.p}); });
+    if(c.extra) out.push({key:t.id+"|extra",option:"Extra people",qty:c.extra,price:t.extra.price});
+    return out; }
+  const v=vehById(it.kind,it.id); return v?[{key:it.kind+"|"+v.id,option:"per day",qty:it.days,price:v.price}]:[];
+}
 const cartTotal = () => cart.reduce((s,it)=>s+((lineInfo(it)||{}).total||0),0);
 function addToCart(it){
   it.uid = Date.now().toString(36)+Math.random().toString(36).slice(2,6);
@@ -344,7 +352,7 @@ $("#coForm").addEventListener("submit", async e=>{
       await fetch(CFG.ordersSheetUrl,{method:"POST",mode:"no-cors",headers:{"Content-Type":"text/plain;charset=utf-8"},signal:AbortSignal.timeout(12000),
         body:JSON.stringify({id:order.id,at:order.at,customer:c,total:order.total,onRequest:order.items.some(it=>(lineInfo(it)||{}).req),text:order.text,
           items:order.items.map(it=>{const L=lineInfo(it)||{};return {type:it.kind==="tour"?"Tour":(it.kind==="bike"?"Motorbike":"Car"),title:L.title||"",details:(L.parts||[]).join("; "),
-            date:it.kind==="tour"?(it.date||""):(it.start||""),days:it.days||"",people:it.kind==="tour"?Object.values(it.qty||{}).reduce((a,b)=>a+b,0)+(it.people?` (boat for ${it.people})`:""):"",amount:L.req?"":L.total};})})});
+            date:it.kind==="tour"?(it.date||""):(it.start||""),days:it.days||"",people:it.kind==="tour"?Object.values(it.qty||{}).reduce((a,b)=>a+b,0)+(it.people?` (boat for ${it.people})`:""):"",amount:L.req?"":L.total,lines:logLines(it)};})})});
       sent=true;
     }catch(err){}
   }
