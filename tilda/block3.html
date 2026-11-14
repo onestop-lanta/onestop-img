@@ -321,6 +321,7 @@ $("#coForm").addEventListener("submit", async e=>{
   if(!c.first||!c.last){ $("#coWarn").textContent="Please enter your first and last name."; return; }
   if(c.phone.replace(/\D/g,"").length<6){ $("#coWarn").textContent="Please enter a phone or WhatsApp number so we can confirm your booking."; return; }
   if(!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(c.email)){ $("#coWarn").textContent="Please enter a valid e-mail — we send your booking confirmation there."; return; }
+  if(!$("#agree").checked){ $("#coWarn").textContent="Please accept the Privacy Policy so we can process your booking."; return; }
   if(!cart.length){ location.hash="cart"; return; }
   $("#coWarn").textContent="";
   store.set("lt_customer",{fn:c.first,ln:c.last,ph:c.phone,em:c.email,stay:c.stay});
@@ -473,7 +474,7 @@ function renderAdmin(){
 }
 
 /* ---------- router ---------- */
-const VIEWS=["home","tours","bikes","cars","cart","checkout","done","contact","admin"];
+const VIEWS=["home","tours","bikes","cars","cart","checkout","done","contact","privacy","admin"];
 function route(){
   let v=(location.hash||"#home").slice(1); if(!VIEWS.includes(v)) v="home";
   if(v==="done" && !$("#orderTxt").textContent){ const lo=store.get("lt_last_order",null); if(lo) showDone(lo); else v="home"; }
