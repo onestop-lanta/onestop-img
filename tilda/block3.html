@@ -43,10 +43,11 @@ function lineInfo(it){
   const v=vehById(it.kind,it.id); if(!v) return null;
   return {title:`${it.kind==="bike"?"Bike":"Car"} №${v.id} — ${v.model}`, img:v.img, total:v.price*it.days, parts:[`${it.days} day${it.days>1?"s":""} × ${fmt(v.price)}`,`Start: ${it.start}`], item:v};
 }
+function t_unit(it){ const t=it.kind==="tour"&&tourById(it.id); return (t&&t.unit)||"boat"; }
 function logLines(it){
   if(it.kind==="tour"){ const t=tourById(it.id); if(!t) return [];
     const c=tourCalc(t,it.qty,it.people); const out=[];
-    t.options.forEach(o=>{ const q=+(it.qty[o.k]||0); if(q) out.push({key:t.id+"|"+o.k,option:o.l,qty:q,price:t.onRequest?"":o.p}); });
+    t.options.forEach(o=>{ const q=+(it.qty[o.k]||0); const tier=o.costTiers&&o.costTiers.find(x=>(it.people||1)<=x.upTo); if(q) out.push({key:t.id+"|"+(tier?tier.k:o.k),option:o.l,qty:q,price:t.onRequest?"":o.p}); });
     if(c.extra) out.push({key:t.id+"|extra",option:"Extra people",qty:c.extra,price:t.extra.price});
     return out; }
   const v=vehById(it.kind,it.id); return v?[{key:it.kind+"|"+v.id,option:"per day",qty:it.days,price:v.price}]:[];
@@ -72,7 +73,7 @@ const IC = {
 function fromPrice(t){
   if(t.onRequest) return `<small>Price on request</small>`;
   const o0=t.options[0];
-  if(t.charter) return `${fmt(o0.p)} <small>/ boat</small>`;
+  if(t.charter) return `${fmt(o0.p)} <small>/ ${t.unit||"boat"}</small>`;
   if(o0.k==="single") return `${fmt(o0.p)} <small>/ person</small>`;
   const lab = o0.k==="adult_rider"?"rider":(o0.k==="adult"?"adult":"person");
   return `${fmt(o0.p)} <small>/ ${lab}</small>`;
@@ -112,7 +113,7 @@ function tourDetail(t){
       ${t.notes&&t.notes.length?`<h4>Good to know</h4><ul class="notes">${t.notes.map(i=>`<li>${esc(i)}</li>`).join("")}</ul>`:""}
     </div>
     <div class="book">
-      <h4>${t.charter?"Book the boat":(t.onRequest?"Request a quote":"Guests")}</h4>
+      <h4>${t.charter?"Book the "+(t.unit||"boat"):(t.onRequest?"Request a quote":"Guests")}</h4>
       ${opts}
       ${t.charter?`<label class="f">${pplLabel}</label><div class="step" data-k="people" style="width:max-content"><button type="button" data-d="-1">−</button><output>2</output><button type="button" data-d="1">+</button></div>`:""}
       ${sels.map((s,i)=>`<label class="f">${esc(s.l)}</label><select data-sel="${i}">${s.o.map(x=>`<option>${esc(x)}</option>`).join("")}</select>`).join("")}
@@ -165,7 +166,7 @@ function wireBook(card,t){
   const read = ()=>{ const q={}; steps.forEach(s=>q[s.dataset.k]=+$("output",s).value); return q; };
   const calc = ()=>{
     const q=read(); const c=tourCalc(t,q,q.people); let msg="";
-    if(t.charter){ if(!q.boat) msg="Choose the boat."; }
+    if(t.charter){ if(!q[t.options[0].k]) msg="Choose the "+(t.unit||"boat")+"."; }
     else if(!c.ppl) msg="Add at least one guest.";
     if(t.maxPeople && !t.charter && c.ppl>t.maxPeople) msg=`Maximum ${t.maxPeople} people for this program.`;
     totEl.textContent = money(t,c.tot); warn.textContent=msg; addB.disabled = !!msg || t.available===false;
@@ -174,7 +175,7 @@ function wireBook(card,t){
   steps.forEach(s=>{
     const out=$("output",s);
     $$("button",s).forEach(b=>b.onclick=()=>{
-      let max = 30; if(s.dataset.k==="boat") max=1; if(s.dataset.k==="people") max=t.maxPeople||5;
+      let max = 30; if(t.charter && s.dataset.k===t.options[0].k) max=1; if(s.dataset.k==="people") max=t.maxPeople||5;
       if(t.maxPeople&&!t.charter) max=t.maxPeople;
       const min = s.dataset.k==="people"?1:0;
       out.value = Math.max(min,Math.min(max,+out.value + +b.dataset.d)); calc();
@@ -353,7 +354,7 @@ $("#coForm").addEventListener("submit", async e=>{
       await fetch(CFG.ordersSheetUrl,{method:"POST",mode:"no-cors",headers:{"Content-Type":"text/plain;charset=utf-8"},signal:AbortSignal.timeout(12000),
         body:JSON.stringify({id:order.id,at:order.at,customer:c,total:order.total,onRequest:order.items.some(it=>(lineInfo(it)||{}).req),text:order.text,
           items:order.items.map(it=>{const L=lineInfo(it)||{};return {type:it.kind==="tour"?"Tour":(it.kind==="bike"?"Motorbike":"Car"),title:L.title||"",details:(L.parts||[]).join("; "),
-            date:it.kind==="tour"?(it.date||""):(it.start||""),days:it.days||"",people:it.kind==="tour"?Object.values(it.qty||{}).reduce((a,b)=>a+b,0)+(it.people?` (boat for ${it.people})`:""):"",amount:L.req?"":L.total,lines:logLines(it)};})})});
+            date:it.kind==="tour"?(it.date||""):(it.start||""),days:it.days||"",people:it.kind==="tour"?Object.values(it.qty||{}).reduce((a,b)=>a+b,0)+(it.people?` (${t_unit(it)} for ${it.people})`:""):"",amount:L.req?"":L.total,lines:logLines(it)};})})});
       sent=true;
     }catch(err){}
   }
