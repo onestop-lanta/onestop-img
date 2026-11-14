@@ -10,7 +10,7 @@ const store = {
   set(k,v){ try{ localStorage.setItem(k,JSON.stringify(v)); return true; }catch(e){ return false; } }
 };
 const clone = o => JSON.parse(JSON.stringify(o));
-const imgSrc = n => !n ? "" : (n.startsWith("data:")||n.includes("/")) ? n : "https://cdn.jsdelivr.net/gh/onestop-lanta/onestop-img@58c5d03/img/os-"+n.replace(/\//g,"-")+".jpg";
+const imgSrc = n => !n ? "" : (n.startsWith("data:")||n.includes("/")) ? n : "https://cdn.jsdelivr.net/gh/onestop-lanta/onestop-img@bd63222/img/os-"+n.replace(/\//g,"-")+".jpg";
 const today = () => new Date().toISOString().slice(0,10);
 
 /* ---------- catalog (defaults + admin overrides) ---------- */
@@ -203,15 +203,15 @@ function renderTours(){
 function renderHome(){
   const pick = {sea:"pp-1",mangrove:"sup-kayak-012",sightseeing:"loc-lighthouse-0",fishing:"loc-kohma-0",jungle:"w-np-aerial",elephant:"sup-ele-010",adventure:"atvB",cooking:"sup-cook-000"};
   $("#cats").innerHTML = CATEGORIES.map(c=>{ const n=CAT.tours.filter(t=>t.cat===c.id).length;
-    return `<button class="cat" data-c="${c.id}"><img loading="lazy" src="https://cdn.jsdelivr.net/gh/onestop-lanta/onestop-img@58c5d03/img/os-${pick[c.id]}.jpg" alt=""><span>${esc(c.name)}<small>${n} option${n!==1?"s":""}</small></span></button>`;}).join("");
+    return `<button class="cat" data-c="${c.id}"><img loading="lazy" src="https://cdn.jsdelivr.net/gh/onestop-lanta/onestop-img@bd63222/img/os-${pick[c.id]}.jpg" alt=""><span>${esc(c.name)}<small>${n} option${n!==1?"s":""}</small></span></button>`;}).join("");
   $$("#cats .cat").forEach(b=>b.onclick=()=>{curCat=b.dataset.c; location.hash="tours"; });
   $("#popular").innerHTML = CAT.tours.filter(t=>t.popular).slice(0,6).map(tourCard).join("");
   $$("#popular .card").forEach(wireCard);
   // rentals teaser
   const teaser = $("#rentTeaser");
   teaser.innerHTML = `
-   <a class="card" href="#bikes" style="text-decoration:none"><div class="ph" style="display:grid;place-items:center;background:#fff"><img src="https://cdn.jsdelivr.net/gh/onestop-lanta/onestop-img@58c5d03/img/os-v-24.jpg" alt="" style="width:62%;height:auto;object-fit:contain"></div><div class="bd"><div class="kind">Motorbike rental</div><h3>Delivered to your hotel or villa</h3><p class="sum">Pick the exact bike, a start date and number of days.</p><div class="row"><div class="price"><small>from</small> ${fmt(Math.min(...CAT.bikes.map(b=>b.price)))} <small>/ day</small></div><span class="more">View bikes →</span></div></div></a>
-   <a class="card" href="#cars" style="text-decoration:none"><div class="ph" style="display:grid;place-items:center;background:#fff"><img src="https://cdn.jsdelivr.net/gh/onestop-lanta/onestop-img@58c5d03/img/os-v-1.jpg" alt="" style="width:66%;height:auto;object-fit:contain"></div><div class="bd"><div class="kind">Car rental</div><h3>Explore the whole island</h3><p class="sum">Choose a specific car and add it to the same cart as your tours.</p><div class="row"><div class="price"><small>from</small> ${fmt(Math.min(...CAT.cars.map(b=>b.price)))} <small>/ day</small></div><span class="more">View cars →</span></div></div></a>`;
+   <a class="card" href="#bikes" style="text-decoration:none"><div class="ph" style="display:grid;place-items:center;background:#fff"><img src="https://cdn.jsdelivr.net/gh/onestop-lanta/onestop-img@bd63222/img/os-v-24.jpg" alt="" style="width:62%;height:auto;object-fit:contain"></div><div class="bd"><div class="kind">Motorbike rental</div><h3>Delivered to your hotel or villa</h3><p class="sum">Pick the exact bike, a start date and number of days.</p><div class="row"><div class="price"><small>from</small> ${fmt(Math.min(...CAT.bikes.map(b=>b.price)))} <small>/ day</small></div><span class="more">View bikes →</span></div></div></a>
+   <a class="card" href="#cars" style="text-decoration:none"><div class="ph" style="display:grid;place-items:center;background:#fff"><img src="https://cdn.jsdelivr.net/gh/onestop-lanta/onestop-img@bd63222/img/os-v-1.jpg" alt="" style="width:66%;height:auto;object-fit:contain"></div><div class="bd"><div class="kind">Car rental</div><h3>Explore the whole island</h3><p class="sum">Choose a specific car and add it to the same cart as your tours.</p><div class="row"><div class="price"><small>from</small> ${fmt(Math.min(...CAT.cars.map(b=>b.price)))} <small>/ day</small></div><span class="more">View cars →</span></div></div></a>`;
 }
 
 /* ---------- vehicles ---------- */
