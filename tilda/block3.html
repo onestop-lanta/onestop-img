@@ -6,8 +6,9 @@ const $ = (s,el=document)=>el.querySelector(s), $$=(s,el=document)=>[...el.query
 const esc = s => String(s??"").replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
 const fmt = n => CUR + Math.round(n).toLocaleString("en-US");
 const store = {
-  get(k,d){ try{ const v=localStorage.getItem(k); return v?JSON.parse(v):d; }catch(e){ return d; } },
-  set(k,v){ try{ localStorage.setItem(k,JSON.stringify(v)); return true; }catch(e){ return false; } }
+  ns(k){ return k+"::"+(CFG.brand||""); },
+  get(k,d){ try{ const v=localStorage.getItem(this.ns(k)); return v?JSON.parse(v):d; }catch(e){ return d; } },
+  set(k,v){ try{ localStorage.setItem(this.ns(k),JSON.stringify(v)); return true; }catch(e){ return false; } }
 };
 const clone = o => JSON.parse(JSON.stringify(o));
 const imgSrc = n => !n ? "" : (n.startsWith("data:")||n.includes("/")) ? n : "https://cdn.jsdelivr.net/gh/onestop-lanta/onestop-img@bd63222/img/os-"+n.replace(/\//g,"-")+".jpg";
