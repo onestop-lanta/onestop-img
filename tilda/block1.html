@@ -380,6 +380,12 @@ footer h3{font-size:26px}
 .seo-cols{display:grid;grid-template-columns:repeat(4,1fr);gap:22px}
 .seo-cols h3{font-size:22px;margin:0 0 8px}.seo-cols p{margin:0;font-weight:300;font-size:14.5px;line-height:1.7;color:var(--muted)}.seo-cols b{font-weight:500;color:var(--ink)}
 @media(max-width:900px){.seo-cols{grid-template-columns:1fr 1fr}}@media(max-width:560px){.seo-cols{grid-template-columns:1fr}}
+/* mobile fixes: grid columns must be allowed to shrink (long thumbnail strips pushed the details panel wider than the screen) */
+.exin>*,.cartgrid>*,.heroIn>*,.rent-intro>*,.about>*,.how>*{min-width:0}
+@media (max-width:820px){.exin{grid-template-columns:minmax(0,1fr)}}
+@media (max-width:900px){.cartgrid{grid-template-columns:minmax(0,1fr)}}
+@media (max-width:820px){.heroIn,.rent-intro,.about{grid-template-columns:minmax(0,1fr)}}
+html,body{overflow-x:hidden}
 </style>
 
 <header class="top">
@@ -407,9 +413,9 @@ footer h3{font-size:26px}
       <div class="trust"><span>✓ Hotel pick-up on most tours</span><span>✓ One cart for tours & rentals</span><span>✓ Confirmation by WhatsApp or e-mail</span></div>
     </div>
     <div class="collage">
-      <figure class="c1 shopfig"><img src="https://cdn.jsdelivr.net/gh/onestop-lanta/onestop-img@bd63222/img/os-shop-hero2.jpg" alt="One Stop Travel & Tour desk on Koh Lanta"><figcaption><span>Our tour desk</span>Visit us on Koh Lanta — or book online</figcaption></figure>
-      <img class="c2" src="https://cdn.jsdelivr.net/gh/onestop-lanta/onestop-img@bd63222/img/os-sup-kayak-005.jpg" alt="Kayaking into Talabeng sea cave">
-      <img class="c3" src="https://cdn.jsdelivr.net/gh/onestop-lanta/onestop-img@bd63222/img/os-loc-rok-3.jpg" alt="Turquoise water at Koh Rok">
+      <figure class="c1 shopfig"><img src="https://cdn.jsdelivr.net/gh/onestop-lanta/onestop-img@df8a5ab/img/os-shop-hero2.jpg" alt="One Stop Travel & Tour desk on Koh Lanta"><figcaption><span>Our tour desk</span>Visit us on Koh Lanta — or book online</figcaption></figure>
+      <img class="c2" src="https://cdn.jsdelivr.net/gh/onestop-lanta/onestop-img@df8a5ab/img/os-sup-kayak-005.jpg" alt="Kayaking into Talabeng sea cave">
+      <img class="c3" src="https://cdn.jsdelivr.net/gh/onestop-lanta/onestop-img@df8a5ab/img/os-loc-rok-3.jpg" alt="Turquoise water at Koh Rok">
     </div>
   </div></div>
   <section class="s"><div class="wrap">
@@ -443,7 +449,7 @@ footer h3{font-size:26px}
     </div>
   </div></section>
   <section class="s" style="padding-top:0"><div class="wrap about">
-    <div class="pic"><img src="https://cdn.jsdelivr.net/gh/onestop-lanta/onestop-img@bd63222/img/os-shop-hero2.jpg" alt="One Stop Travel & Tour desk on Koh Lanta" id="shopPhoto" style="object-position:50% 45%"></div>
+    <div class="pic"><img src="https://cdn.jsdelivr.net/gh/onestop-lanta/onestop-img@df8a5ab/img/os-shop-hero2.jpg" alt="One Stop Travel & Tour desk on Koh Lanta" id="shopPhoto" style="object-position:50% 45%"></div>
     <div>
       <div class="eyebrow">Our tour desk · One Stop Travel & Tour</div>
       <h2 style="font-size:clamp(28px,3.6vw,40px);margin:6px 0 14px">One place for everything on Koh Lanta</h2>
