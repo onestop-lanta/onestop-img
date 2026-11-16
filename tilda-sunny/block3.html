@@ -389,7 +389,7 @@ function showDone(order){
   $("#doneTitle").textContent = first ? `Thank you, ${first}!` : "Thank you!";
   $("#doneEyebrow").textContent = ok ? `Booking request ${order.id} received` : `Booking ${order.id} — one more step`;
   $("#doneTxt").innerHTML = ok
-    ? `We've received your booking request. After checking availability, our team will contact you <b>shortly via WhatsApp or phone</b> to confirm your booking and pick-up time.${order.customer&&order.customer.email?"":""}`
+    ? `We've received your booking request. After checking availability, our team will contact you <b>shortly via WhatsApp, e-mail or phone</b> to confirm your booking and pick-up time.${order.customer&&order.customer.email?"":""}`
     : `Your booking is ready but hasn't reached us yet. Please send it with the WhatsApp button below and we'll confirm shortly.`;
   $("#doneFallback").style.display = ok ? "none" : "block";
   $("#doneSteps").style.display = ok ? "" : "none";
