@@ -1,6 +1,12 @@
 <script>
 (function(){
 "use strict";
+/* mark empty date fields so a "Select date" hint shows (iOS shows an empty box otherwise) */
+(function(){
+  function mark(r){ (r||document).querySelectorAll('input[type=date]').forEach(i=>{ if(i.value) i.removeAttribute("data-empty"); else i.setAttribute("data-empty",""); }); }
+  document.addEventListener("input",()=>mark(),true); document.addEventListener("change",()=>mark(),true);
+  new MutationObserver(()=>mark()).observe(document.body,{childList:true,subtree:true}); mark();
+})();
 /* ---- image delivery fallback: if the CDN is slow or fails, retry from mirrors ---- */
 (function(){
   const RX=/^https:\/\/cdn\.jsdelivr\.net\/gh\/([^@]+)@([0-9a-f]+)\/(.+)$/;
