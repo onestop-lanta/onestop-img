@@ -1,11 +1,65 @@
 <script>
 (function(){
 "use strict";
-/* mark empty date fields so a "Select date" hint shows (iOS shows an empty box otherwise) */
+/* ---- English calendar: native date pickers follow the browser language (e.g. Russian), so we use our own ---- */
 (function(){
-  function mark(r){ (r||document).querySelectorAll('input[type=date]').forEach(i=>{ if(i.value) i.removeAttribute("data-empty"); else i.setAttribute("data-empty",""); }); }
-  document.addEventListener("input",()=>mark(),true); document.addEventListener("change",()=>mark(),true);
-  new MutationObserver(()=>mark()).observe(document.body,{childList:true,subtree:true}); mark();
+  const MN=["January","February","March","April","May","June","July","August","September","October","November","December"];
+  const DN=["Mo","Tu","We","Th","Fr","Sa","Su"], DS=["Sun","Mon","Tue","Wed","Thu","Fri","Sat"];
+  const p2=n=>String(n).padStart(2,"0"), iso=(y,m,d)=>y+"-"+p2(m+1)+"-"+p2(d);
+  const parse=s=>{ const m=/^(\d{4})-(\d{2})-(\d{2})$/.exec(s||""); return m?{y:+m[1],m:+m[2]-1,d:+m[3]}:null; };
+  const label=s=>{ const o=parse(s); if(!o) return ""; const dt=new Date(o.y,o.m,o.d); return DS[dt.getDay()]+", "+o.d+" "+MN[o.m].slice(0,3)+" "+o.y; };
+  let pop=null, cur=null, vy=0, vm=0;
+  function sync(i){ const b=i._dpx; if(!b) return; const t=label(i.value); b.textContent=t||"Select date"; b.classList.toggle("empty",!t); }
+  function enhance(i){
+    if(i._dpx) return; i._dpx=1;
+    const cs=getComputedStyle(i);
+    const b=document.createElement("button"); b.type="button"; b.className="dpx";
+    b.style.cssText="border:"+cs.border+";border-radius:"+cs.borderRadius+";padding:"+cs.padding+";font:"+cs.font+";background:#fff;color:inherit";
+    i.parentNode.insertBefore(b,i.nextSibling); i._dpx=b; b._inp=i;
+    i.style.setProperty("display","none","important"); sync(i);
+    b.addEventListener("click",e=>{ e.preventDefault(); e.stopPropagation(); open(i); });
+    const desc=Object.getOwnPropertyDescriptor(HTMLInputElement.prototype,"value");
+    Object.defineProperty(i,"value",{get(){return desc.get.call(i);},set(v){desc.set.call(i,v);sync(i);},configurable:true});
+  }
+  function scan(r){ (r||document).querySelectorAll("input[type=date]").forEach(enhance); }
+  function close(){ if(pop){ pop.remove(); pop=null; cur=null; } }
+  function open(i){
+    if(cur===i){ close(); return; } close(); cur=i;
+    const sel=parse(i.value), min=parse(i.min), now=new Date();
+    const base=sel||min||{y:now.getFullYear(),m:now.getMonth()};
+    vy=base.y; vm=base.m;
+    pop=document.createElement("div"); pop.className="dpop"; document.body.appendChild(pop);
+    draw(); place(i._dpx);
+  }
+  function draw(){
+    const i=cur; if(!i||!pop) return;
+    const sel=parse(i.value), min=parse(i.min), now=new Date(), td=iso(now.getFullYear(),now.getMonth(),now.getDate());
+    const first=(new Date(vy,vm,1).getDay()+6)%7, dim=new Date(vy,vm+1,0).getDate();
+    let h='<div class="dph"><button type="button" data-n="-1" aria-label="Previous month">‹</button><b>'+MN[vm]+" "+vy+'</b><button type="button" data-n="1" aria-label="Next month">›</button></div><div class="dpg">';
+    DN.forEach(d=>h+="<i>"+d+"</i>");
+    for(let k=0;k<first;k++) h+="<span></span>";
+    for(let d=1;d<=dim;d++){
+      const s=iso(vy,vm,d), dis=min&&s<i.min;
+      h+='<button type="button" data-d="'+s+'"'+(dis?" disabled":"")+' class="'+(sel&&s===i.value?"on ":"")+(s===td?"td":"")+'">'+d+"</button>";
+    }
+    pop.innerHTML=h+"</div>";
+  }
+  function place(b){
+    const r=b.getBoundingClientRect(), w=Math.min(320,innerWidth-16), H=pop.offsetHeight||330;
+    let left=Math.max(8,Math.min(r.left,innerWidth-w-8)), top=r.bottom+6;
+    if(top+H>innerHeight-8) top=Math.max(8,r.top-H-6);
+    pop.style.width=w+"px"; pop.style.left=left+"px"; pop.style.top=top+"px";
+  }
+  document.addEventListener("click",e=>{
+    if(!pop) return;
+    const n=e.target.closest("[data-n]"), d=e.target.closest("[data-d]");
+    if(n&&pop.contains(n)){ vm+= +n.dataset.n; if(vm<0){vm=11;vy--;} if(vm>11){vm=0;vy++;} draw(); e.stopPropagation(); return; }
+    if(d&&pop.contains(d)){ const i=cur; i.value=d.dataset.d; i.dispatchEvent(new Event("input",{bubbles:true})); i.dispatchEvent(new Event("change",{bubbles:true})); close(); return; }
+    if(!pop.contains(e.target)&&!(e.target.closest&&e.target.closest(".dpx"))) close();
+  },true);
+  document.addEventListener("keydown",e=>{ if(e.key==="Escape") close(); });
+  addEventListener("resize",()=>{ if(pop&&cur) place(cur._dpx); }); addEventListener("scroll",e=>{ if(pop&&cur&&!pop.contains(e.target)) place(cur._dpx); },true);
+  new MutationObserver(()=>scan()).observe(document.body,{childList:true,subtree:true}); scan();
 })();
 /* ---- image delivery fallback: if the CDN is slow or fails, retry from mirrors ---- */
 (function(){
